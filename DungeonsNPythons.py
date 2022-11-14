@@ -1,5 +1,6 @@
 # Code author: Patrick Woolard
 # Email: Jwoolard@augusta.edu
+# Github: https://github.com/JwoolardAU/DungeonsNPythons
 
 '''
 Welcome to Dungeons & Pythons!
@@ -10,6 +11,8 @@ Ensure that you have support for the following modules in your python environmen
 
 - "requests" (For Webscrapping):     pip install requests
 - "bs4" (Parses Webscrapped Data):   pip install bs4
+
+*** The program "begins" after the recieveChar() function definition about halfway through this file ***
 '''
 
 # List of necessary modules used to execute Dungeons & Pythons
@@ -26,7 +29,9 @@ from zipfile import ZipFile # used to consolidate and extract shelve files for t
 import shutil # only used to delete temporary directories once they are no longer needed 
 
 
-class Character: # This is what gets saved in shelve
+# The Character class is used as a wrapper for all important details a Dungeons and Dragons character needs (i.e. race, class, ability scores, etc.)
+# Each charachter object that gets created gets saved to a shelve so that saved characters exist across multiple sessions of the application
+class Character:
     
   # These get filled out in creation mode using constructor
   race = None
@@ -37,7 +42,7 @@ class Character: # This is what gets saved in shelve
   abScores = None # This one can be updated later in character management mode
   # These get filled out in creation mode using constructor
 
-
+  # Object constructor where we fill out class attributes based on user choices
   def __init__(self, r, c, n, a, g, abS):
     self.race = r
     self.charClass = c
@@ -55,7 +60,6 @@ class Character: # This is what gets saved in shelve
   sessGoals = None # "If you have any goals or notes for the next play session \n(i.e. 'I curently have 5 health points' or 'sell magic staff') "
   inventory = None
   backStory = "Not yet set... (Give your character a back story, it will help bring them more to life!)"
-
   # These get updated in character management mode
 
 
@@ -105,10 +109,12 @@ def characterManager(CharObj):
         print("Choose a row number from the following options. \nIf you need help deciding, type 'help' for a useful guide.\n")
         aligns = ["Lawful Good", "Neutral Good", "Chaotic Good", "Lawful Neutral", "True Neutral", "Chaotic Neutral", "Lawful Evil", "Neutral Evil", "Chaotic Evil"]
 
+        # printing out all the alignment options for the user to pick from
         for a in range(0,9):
           print(f"{str(a+1)}) " + aligns[a])
         print()
 
+        # Alignment selection and input validation loop
         while True:
           choice = input("Alignment Option: ").strip().lower()
           
@@ -308,66 +314,88 @@ def helpHeader(centerNum, text):
 
 def sendChar():
   '''
-  This will send characters to other users assuming they are calling recieveChar 
+  This will send a selected character to another user assuming they have selected the 'Character Share' feature and are ready to recieve
   '''
 
+  # Check to see if there is a character shelve
   try:
     shelfFile = shelve.open('.\DNP_Characters\Characters')
   except:
+    #if there isn't, prompt the user to make characters and exit the sending procedure
     print("You do not have any characters to send. Make a character and try again!\n")
     return 
   
+  # check to see if the user has any characters to send. If not, then exit the sending procedure
   characterList = list(shelfFile.keys()) # list of keys which in this case are character names
   if len(characterList) == 0:
     print("You do not have any characters to send. Make a character and try again!\n")
     return
   
+  # prints out all character names as options for sending
   print()
   for charNum in range(0,len(characterList)):
-    print(f"{charNum+1}) {characterList[charNum]}") # prints out character names
+    print(f"{charNum+1}) {characterList[charNum]}") 
   print()
 
+  # User selection and input validation loop
   while True:
     choice = input("Which character would you like to send? (type a row number): ").strip()
-    try:
+    try: # in case the user enters a non integer, the except clause will trigger
       choice = int(choice)
-      if choice > 0 and choice < (len(characterList)+1):
+      if choice > 0 and choice < (len(characterList)+1): # the user can only pick an integer that corresponds with a character
+
+        # Obtain the user's selected character from shelve
         CharObj = shelfFile[characterList[choice-1]]
         print("\nPlease type the appropriate ip address provided by the recieving user.")
 
+        # Obtain input from user that should be the IP Address of the reciever 
         host = input("IP Address of reciever: ").strip()
 
         print("\nAttempting to connect...")
 
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # AF_INET = IP, SOCK_STREAM = TCP
+        # This creates the socket object that will send the character object to the other user
+        # The arguments correspond with the protocols we wish to use for communication, i.e. TCP/IP (AF_INET = IP, SOCK_STREAM = TCP)
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  
+
+        # If the user entered the wrong IP or anything else that doesn't make sense, the execpt clause will trigger 
         try:
+          # Try to connect to the recieving user
           client.connect((host, 1002))
         except:
+          # Connection failed and we exit the sending procedure
           print("Connection attempt either failed or timed out. Double check ip address and try again.\n\n")
           break
+
+        # Alert user the connection was successful
         print(f"Connection made with other user! Sending {characterList[choice-1]}...")
 
+        # Make a temporary directory for storing a temporary shelve that... 
         os.mkdir('.\DNP_Characters\Temp_Send')
 
+        # ... contains only the character object the user wishes to send
         tempShelf = shelve.open('.\DNP_Characters\Temp_Send\Send')
         tempShelf[characterList[choice-1]] = CharObj
         tempShelf.close()
 
 
-        # zip stuff
+        # For ease of implementation, we will be sending all of the shelve files (of which there are 3 for a given shelve object)
+        # as one zipped folder/file. The reason for this is because sending multiple files using the client object above can be rather
+        # tedious as far as separating and assembling the files' data into their distinct files on the recieving end. So we send everything
+        # as one zipped folder/file instead, and extract all of the contents on the recieving end.
 
-        # initializing empty file paths list
+        # initializing empty file paths list (we need to collect the path of all files we wish to collect)
         file_paths = []
 
-        # crawling through directory and subdirectories
-        for root, directories, files in os.walk('.\DNP_Characters\Temp_Send'):
+        # crawling through the temporary directory to collect all file paths 
+        # os.walk() is an easy way to access all of the directory's files and root path information
+        for root, directories, files in os.walk('.\DNP_Characters\Temp_Send'): 
           for filename in files:
             # join the two strings in order to form the full filepath.
             filepath = os.path.join(root, filename)
             file_paths.append(filepath)
 
 
-        # printing the list of all files to be zipped
+        # printing the list of all files to be zipped (for testing purposes only)
         '''
         print('Following files will be zipped:')
         for file_name in file_paths:
@@ -375,41 +403,45 @@ def sendChar():
         '''
 
 
-        # writing files to a zipfile
+        # Writing all files whose paths we collected above to a zipfile
         with ZipFile('Send.zip','w') as zip:
-          # writing each file one by one
+          # Writing each file one by one
           for file in file_paths:
             zip.write(file)
         
 
-
+        # Now that we have our one unified zipfile, we write its data to the recieving user
         file = open('.\Send.zip', 'rb')
-        file_data = file.read(2048)
+        file_data = file.read(2048) # We will be sending the zip file in 2048 byte chunks...
+        # ... until there is no more data to send (in which case file_data will be None which the while loop evaluates as false)
         while file_data:
-          client.send(file_data)
-          file_data = file.read(2048)
+          client.send(file_data) # send file data to recieving user
+          file_data = file.read(2048) # grab the next 2048 byte chunk
         file.close()
         
 
-
+        # We are finished with our connection to the other user so we terminate it
         client.close()
+
+        # Inform the user the sending was successful
         print(f"Successful! Other user now has {characterList[choice-1]} added to their character list.\n\n")
 
-
+        # The zipfile and the temporary shleve directory (and its contents) are no longer needed so we delete them
+        # The end user should never even know they existed
         os.remove("send.zip")
         shutil.rmtree(".\DNP_Characters\Temp_Send")
         break
-      else:
+      else: # The user entered an integer choice that was not valid. Prompt them to try again
         print(f"'{choice}' is not a valid row number. Try again")
         continue
-    except:
+    except: # The user entered something that was not an integer causing `int(choice)` to throw an error. Prompt them to try again
       print(f"'{choice}' is not a valid row number. Try again!")
 
 
 
 def recieveChar():
   '''
-  This will recieve characters to other users assuming they are calling sendChar 
+  This will recieve a character from another user assuming they have selected the 'Character Share' feature and are ready to send
   '''
 
   # In case the user does not have the shelf folder, make it for them
@@ -422,6 +454,7 @@ def recieveChar():
     shelfFile.close()
 
 
+  # Inform the user on providing the proper IP Address needed for communication to the sending user
   print("\nIn order to receive a character from another user, you must provide your local wireless IP Address to the sender.")
   print("If you would like to proceed and begin awaiting the other user's character, enter 'proceed'")
   print("Otherwise enter 'exit' to return to the main menu.")
@@ -429,12 +462,14 @@ def recieveChar():
   print("IMPORTANT: you will need to specifically share the 'IPv4 Address' under the 'Wireless LAN adapter Wi-Fi' section)\n")
 
   
-
+  # User selection and input validation loop
   while True:
     choice = input("Which would you like to do: ").strip().lower()
 
     if choice == "help":
       print()
+      # In the event the user does not know their IP Address, we can print out the information to the shell for the user to obtain
+      # Clear instructions on which IP to provided have been provided to the user already
       os.system("ipconfig")
       print()
     elif choice == "proceed":
@@ -445,26 +480,46 @@ def recieveChar():
     else:
       print(f"I'm sorry, I didn't understand '{choice}' \n")
 
-  host = ''
-  port = 1002
-  server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # AF_INET = IP, SOCK_STREAM = TCP
-  server.bind((host, port))  
-  print("Awaiting to recieve character... (To cancel, close shellwindow)")
-  server.listen()
+  # Server (receiving user) creation:
 
+  # This is the IP address the sending user will be hosted on. 
+  # It being blank signifies that it will be open to any client IP address that wishes to connect to it on the specified port below. 
+  host = '' 
+
+  # The port number the host will be listening out for the sending user on.
+  # The port value has been chosen mostly arbitrarily and is hardcoded to match the sending user's port. The user can not access nor change this.
+  port = 1002 
+
+  # This creates the socket object that will recieve the character object from the other user.
+  # The arguments correspond with the protocols we wish to use for communication, i.e. TCP/IP
+  server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # AF_INET = IP, SOCK_STREAM = TCP
+  server.bind((host, port))  # bind server to IP and port above
+  print("Awaiting to recieve character... (To cancel, close shellwindow)") # keyboard shutdown (CRTL+C) does not work. If user needs to restart they must close shell.
+
+  try:
+    server.listen() # Await connection from other user
+  except:
+    print("Server failure. Try again\n\n")
+    return
+
+  # server (reciever) has successfully established client (sender) connection
   client_socket, client_address = server.accept()
 
+  # We expect that the user is sending a zip file, so we will create one from the data being recieved
   file = open('recv.zip', "wb")
   data_chunk = client_socket.recv(2048)  # stream-based protocol
 
+  # We will be recieving data for the zip file in 2048 byte chunks
+  # When we run out of data chunks to write the loop will terminate
   while data_chunk:
-    file.write(data_chunk)
-    data_chunk = client_socket.recv(2048)
+    file.write(data_chunk) # Write the data chunk to the file
+    data_chunk = client_socket.recv(2048) # Collect the next data chunk
 
+  # Close zipfile for writing and terminate connection to client (sender)
   file.close()
   client_socket.close()
-    
-  # opening the zip file in READ mode
+
+  # extracting the contents of the recieved zip file to a temporary directory
   with ZipFile("recv.zip", 'r') as zip:
     os.mkdir("Temp_Recv")
     zip.extractall(path=".\Temp_Recv")
@@ -538,114 +593,132 @@ print('''
 
 # Beginning/Main DNP Menu ↓↓↓
 
+# This acts as the main menu option execution and input validation loop
 while True:
-    print(" + Enter '1' if you would like to make a new character.")
-    print(" + Enter '2' if you would like to manage an existing character.")
-    print(" + Enter '3' if you would like to send/recieve characters from other Dungeons and Pythons users. (WINDOWS USERS ONLY)")
-    print(" + Enter 'exit' if you would like to leave the app.\n")
-    choice = input("Which would you like to do: ").strip().lower()
-    if choice == "1":
-        print("\n")
-        helpHeader(40, "Make a New Character")
-        break
-    elif choice == "2":
-        print("\n")
-        helpHeader(36, "Manage Your Characters")
-        print()
+  print(" + Enter '1' if you would like to make a new character.")
+  print(" + Enter '2' if you would like to manage an existing character.")
+  print(" + Enter '3' if you would like to send/recieve characters from other Dungeons and Pythons users. (WINDOWS USERS ONLY)")
+  print(" + Enter 'exit' if you would like to leave the app.\n")
 
-        try:
-          shelfFile = shelve.open('.\DNP_Characters\Characters')
-        except:
-          os.mkdir('DNP_Characters') # in the event the user does not yet have a DNP_Characters folder
-          shelfFile = shelve.open('.\DNP_Characters\Characters')
-        
-        characterList = list(shelfFile.keys())
-        if len(characterList) == 0:
-          print("No characters have been created yet. Created characters will be stored in a folder called 'DNP_Characters' \n")
-          continue
+  # Throughout the program input will be validated for user ease-of-use and to prevent logic/programmatic errors 
+  choice = input("Which would you like to do: ").strip().lower() 
 
-        for charNum in range(0,len(characterList)):
-          print(f"{charNum+1}) {characterList[charNum]}")
-        print()
-
-        while True:
-          choice = input("Which character would you like to manage? (type a row number): ").strip()
-          try:
-            choice = int(choice)
-            if choice > 0 and choice < (len(characterList)+1):
-              CharObj = shelfFile[characterList[choice-1]]
-              break
-            else:
-              print(f"'{choice}' is not a valid row number. Try again")
-              continue
-          except:
-            print(f"'{choice}' is not a valid row number. Try again!")
-        
-        helpHeader(36, f"Character: {CharObj.name}")
-        print()
-        
-        nameSv = CharObj.name
-        CharObj = characterManager(CharObj)   # Update Character
-
-        if CharObj == "y":
-          del shelfFile[nameSv]               # Delete Character
-        else:
-          shelfFile[CharObj.name] = CharObj   # Save Changes
-
-        shelfFile.close()                     # Close Shelf
-    elif choice == "3":
+  if choice == "1": # This option begins the character creation sequence down belows
       print("\n")
+      helpHeader(40, "Make a New Character")
+      break
+  elif choice == "2": # This option opens the character manager, allowing the user to view/edit existing character information
+      print("\n")
+      helpHeader(36, "Manage Your Characters")
+      print()
 
-      if platform.system() != "Windows":
-        print("This feature is only offered for Windows users of Dungeons and Pythons, sorry!\n")
+      try:
+        shelfFile = shelve.open('.\DNP_Characters\Characters')
+      except:
+        os.mkdir('DNP_Characters') # in the event the user does not yet have a DNP_Characters folder
+        shelfFile = shelve.open('.\DNP_Characters\Characters')
+      
+      characterList = list(shelfFile.keys())
+      if len(characterList) == 0:
+        print("No characters have been created yet. Created characters will be stored in a folder called 'DNP_Characters' \n")
         continue
 
-      helpHeader(30, "Character Share")
-      print("\n")
+      for charNum in range(0,len(characterList)):
+        print(f"{charNum+1}) {characterList[charNum]}")
+      print()
 
-      # Explaining the features of 'Character Share' to the user as well as some usage requirements
-      print("This feature allows you to send or recieve characters to other Dungeons and Python users.")
-      print("There are some requirements in order to use character sharing:")
-      print("\t- The character being sent must not share a name with any character the reciever already owns.")
-      print("\t- You and the other user must both be connected to the same Wifi network.")
-      print("\t- The connection must be wireless (i.e. wired internet connection only will not work).")
-      print("\t- A Windows notification may appear asking for you to enable python to allow for wireless connection access.")
-      print("\t  In which case you must allow python to have said access in order to continue.\n")
-      
-      print("If you would like to proceed enter 'proceed', otherwise enter 'exit' to return to the previous menu.")
       while True:
-        choice = input("Which would you like to do: ").strip().lower()
-        if choice == "proceed":
-          print()
-          print("\t+ Enter '1' if you would like to send a character.")
-          print("\t+ Enter '2' if you would like to recieve a character.\n")
-
-          while True:
-            choice = input("Which would you like to do: ").strip().lower()
-            if choice == "1":
-              sendChar()
-              break
-            elif choice == "2":
-              recieveChar()
-              break
-            else:
-              print(f"I'm sorry, I didn't understand '{choice}' \n")
-
-          break
-        elif choice == "exit":
-          print('\n')
-          break
-        else:
-          print(f"I'm sorry, I didn't understand '{choice}' \n")
+        choice = input("Which character would you like to manage? (type a row number): ").strip()
+        try:
+          choice = int(choice)
+          if choice > 0 and choice < (len(characterList)+1):
+            CharObj = shelfFile[characterList[choice-1]]
+            break
+          else:
+            print(f"'{choice}' is not a valid row number. Try again")
+            continue
+        except:
+          print(f"'{choice}' is not a valid row number. Try again!")
       
-      continue # return to main menu
+      helpHeader(36, f"Character: {CharObj.name}")
+      print()
+      
+      nameSv = CharObj.name
+      CharObj = characterManager(CharObj)   # Update Character
+
+      if CharObj == "y":
+        del shelfFile[nameSv]               # Delete Character
+      else:
+        shelfFile[CharObj.name] = CharObj   # Save Changes
+
+      shelfFile.close()                     # Close Shelf
+  elif choice == "3": # This option allows users to share characters with one another
+    print("\n")
+
+    # prevent user from character share feature if they are not on a windows operating system
+    # (The main reason for this is the execution of windows only commands in the "Character Share" feature not avaliable in Windows)
+    if platform.system() != "Windows":
+      print("This feature is only offered for Windows users of Dungeons and Pythons, sorry!\n")
+      continue
+
+    helpHeader(30, "Character Share")
+    print("\n")
+
+    # Explaining the features of 'Character Share' to the user as well as some usage requirements
+    print("This feature allows you to send or recieve characters to other Dungeons and Python users.")
+    print("There are some requirements in order to use character sharing:")
+    print("\t- The character being sent must not share a name with any character the reciever already owns.")
+    print("\t- You and the other user must both be connected to the same Wifi network.")
+    print("\t- The connection must be wireless (i.e. wired internet connection only will not work).")
+    print("\t- A Windows notification may appear asking for you to enable python to allow for wireless connection access.")
+    print("\t  In which case you must allow python to have said access in order to continue.\n")
+    
+    print("If you would like to proceed enter 'proceed', otherwise enter 'exit' to return to the previous menu.")
+
+    # User selection and input validation loop
+    while True:
+      choice = input("Which would you like to do: ").strip().lower()
+      if choice == "proceed":
+        print()
+        print("\t+ Enter '1' if you would like to send a character.")
+        print("\t+ Enter '2' if you would like to recieve a character.\n")
 
 
-    elif choice == "exit":
-      exit()
-    else:
-      print(f"I'm sorry, I didn't understand '{choice}' \n")
+        while True:
+          choice = input("Which would you like to do: ").strip().lower()
+          if choice == "1":
+            sendChar()
+            break
+          elif choice == "2":
+            recieveChar()
+            break
+          else:
+            print(f"I'm sorry, I didn't understand '{choice}' \n")
+
+        break
+      elif choice == "exit":
+        print('\n')
+        break
+      else:
+        print(f"I'm sorry, I didn't understand '{choice}' \n")
+    
+    continue # return to main menu (the outer most while loop)
+
+
+  # user has finished their session and wishes to exit the program peacefully
+  elif choice == "exit":
+    exit()
+  else: # user entered in something that was not a valid choice
+    print(f"I'm sorry, I didn't understand '{choice}' \n")
         
+
+
+# ↓↓↓ CHARACTER CREATION STARTS HERE ↓↓↓
+
+# Character creation utilizes functions made to create and validate aspects of a Dungeons and Dragons character.
+# These aspects were made into functions to be re-utlized as needed when the user finializes their decisions when making a character
+# and when using the "Character Manager" feature.
+
 
 # ---------------------------------- CHARACTER RACE I/O ----------------------------------
 
@@ -679,6 +752,7 @@ def pickRace():
               raceStr = races[int(choice)-1].lower()
               print("\nOpening:  https://www.dndbeyond.com/races/" + raceStr + "\n")
               try:
+                # the user's default web browser will open displaying a page about the race they want to learn more about
                 wb.open('https://www.dndbeyond.com/races/' + raceStr)
               except:
                 print("Sorry, unable to open URL in browser.")
@@ -696,7 +770,8 @@ def pickRace():
         choice = random.randrange(1,10)
       
 
-      try:
+      try: # if the user enters in something that is not an integer, the except clause will trigger
+          # the user can only pick among the nine races available
         if int(choice) > 0 and int(choice) < 10:
           raceChoice = races[int(choice)-1]
           choice = input("Your character will be a " + raceChoice + " then? (Y/N): ").strip().lower()
@@ -715,10 +790,12 @@ print()
 # ---------------------------------- CHARACTER CLASS I/O ----------------------------------
 
 def pickClass():
+  # list of possible classes avaliable in Dungeons and Dragons 5th edition that the user can pick from
   classes = ["Barbarian","Bard","Cleric","Druid","Fighter","Monk","Paladin","Ranger","Rogue","Sorcerer","Warlock","Wizard"]
 
   print("Next is your character's class. Choose from among these options:\n")
 
+  # formatting the class options to the user
   for i in range(0,12):
     print(str(i+1) + ") " + classes[i])
 
@@ -780,6 +857,13 @@ print("Now it's time to calculate ability score values! 6 values will be display
 print("You will be asked which values will go to which of your character's ability score. \n")
 
 def rollScores():
+  '''
+  In order to simulate the same probability as rolling a real dice for ability scores, we will follow the same strategy:
+
+  - For each ability score, we roll a six-sided dice 4 times.
+  - We take the sum of the highest 3 rolls and that becomes the ability score value
+  - We do thus process a total of 6 times for each ability score
+  '''
 
   values = []
 
@@ -787,7 +871,7 @@ def rollScores():
     rolls = []
 
     for roll in range(1,5): # roll 4 dice
-      rolls.append(random.randrange(1,7))
+      rolls.append(random.randrange(1,7)) 
     
     # Sum the highest 3 rolls 
     rolls.sort()
@@ -807,12 +891,13 @@ while True:
   print()
 
   choice = input("Would you like to re-roll your ability scores? (Y/N): ").strip().lower()
-  if choice == "n":
+  if choice == "n": # if the user is happy with their roles, then let them proceed
     break
 print()
 
 
 def assignScores(Scores):
+  # Dictionary of all ability scores avaliable in Dungeons and Dragons 5th edition that a character has
   abScores = {"Strength" : None, "Dexterity" : None, "Constitution" : None, "Intelligence" : None, "Wisdom" : None, "Charisma" : None}
 
   usedScores = []
@@ -935,33 +1020,47 @@ while True:
 print("\nNow let's give your character a name!")
 print("If you would like, I can help you find some names based on your character's race and gender (just type 'help' below) ")
 
+# Check to see if the user has the directory where the character shelve should be
 try:
-  shelfFile = shelve.open('.\DNP_Characters\Characters') # Opened now to avoid conflicting names in shelve
+  shelfFile = shelve.open('.\DNP_Characters\Characters') 
 except: 
   os.mkdir('DNP_Characters') # in the event the user does not yet have a DNP_Characters folder
   shelfFile = shelve.open('.\DNP_Characters\Characters')
 
+# We open the shelve here to make sure that when we call nameAssignment(), we do not let the user name the character a name
+# That is the same as an existing character. The keys in a shelve (which basically functions the same as a vanilla python dictionary)
+# must be unique. We will check that this uniqueness is preserved in nameAssignment()'s function definition. 
+
 def nameAssignment():
+  '''
+  Collects character name information from the user and ensures that it does not match an existing character's name.
+  We will also supply the user with the option to learn more about common names given their prior race selection.  
+
+  NOTE: the shelve object `shelfFile` and race selection `raceChoice` both have global scope when defined above and do not need to be passed as arguments.
+  '''
+
+  # User name selection and input validation loop
   while True:
     nameChoice = input("Name Option: ").strip()
-    if nameChoice == '':
+    if nameChoice == '': # character name cannot be blank string
       print("\nYou must give your character a name!\n")
-    elif nameChoice in shelfFile.keys():
+    elif nameChoice in shelfFile.keys(): # do not allow user to name character if there exists a character with the same name already  
       print(f"\nYou already have a character called {nameChoice}. You must use a new name!\n")
     elif nameChoice.lower() == 'help':
 
+      # Open a web page corresponding to the user's race selection and common names thereof
       print("\nOpening:  https://www.fantasynamegenerators.com/dnd-" + raceChoice.lower() + "-names.php" + "\n") # https://www.fantasynamegenerators.com/dnd-dragonborn-names.php
       try:
         wb.open("https://www.fantasynamegenerators.com/dnd-" + raceChoice.lower() + "-names.php")
-      except:
-        print("Sorry, unable to open URL in browser.")
+      except: # In the event opening the web page fails
+        print("Sorry, unable to open URL in browser.\n")
       
-
-
-    elif len(nameChoice) > 30:
-      print("\nName must be less than 30 letters\n")
+    # Name choice realistically should not be very long.
+    elif len(nameChoice) > 40:
+      print("\nName must be less than 40 letters\n")
     else:
       return nameChoice
+
 
 while True:
   nameChoice = nameAssignment()
@@ -976,6 +1075,7 @@ while True:
 print()
 helpHeader(40,"Character Finalization")
 
+# Present the user all of their choices thus far and present them with editing options
 while True:
 
   print()
@@ -992,14 +1092,17 @@ while True:
   # Give the user the chance one last time to change anything they want about their character, or if they are finished.
   choice = input("Finalization Option: ").strip().lower() 
   if choice == "y":
+    # Create the actual character object using the user's choices as constructor arguments 
     NewChar = Character(raceChoice, classChoice, nameChoice, ageChoice, genderChoice, abScores)
     
-    # shelf opened in name creation to avoid conflicting names
+    # Save the final character object to the shelve so that it exists across multiple sessions of the app and close the shelve file
     shelfFile[nameChoice] = NewChar
     shelfFile.close()
 
-    print(f"{nameChoice} is now an established character! \nTo manage {nameChoice}'s information, restart DungeonsNPythons and select the manage existing character option!\nAll characters are stored in a folder called 'DNP_Characters' so do NOT delete that folder unless you want to lose all your characters!\n")
-    break
+    print(f"{nameChoice} is now an established character! \nTo manage {nameChoice}'s information, restart DungeonsNPythons and select the manage existing character option!\nAll characters are stored in a folder called 'DNP_Characters' so do NOT delete that folder unless you want to lose all your characters!\n\n")
+    break # This will end the application.
+
+  # Options for the user to edit any decision made thus far 
   elif choice == "1":
     nameChoice = nameAssignment()
   elif choice == "2":
