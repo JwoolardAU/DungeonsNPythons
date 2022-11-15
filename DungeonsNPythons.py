@@ -2,6 +2,7 @@
 # Email: Jwoolard@augusta.edu
 # Github: https://github.com/JwoolardAU/DungeonsNPythons
 
+
 '''
 Welcome to Dungeons & Pythons!
 
@@ -15,7 +16,8 @@ Ensure that you have support for the following modules in your python environmen
 *** The program "begins" after the recieveChar() function definition about halfway through this file ***
 '''
 
-# List of necessary modules used to execute Dungeons & Pythons
+
+# List of necessary modules used to execute Dungeons & Pythons:
 
 import shelve # storing character information so it gets saved across multiple sessions
 import random # mainly used for simulating rolling dice
@@ -26,7 +28,9 @@ import os # use to handle file/folder control operations
 import platform # used to check operating system of user to prevent non-Windows users from crashing the app if they use 'Character Share' feature 
 import socket # used to handle tcp communication for the 'Character Share' feature 
 from zipfile import ZipFile # used to consolidate and extract shelve files for the 'Character Share' feature 
-import shutil # only used to delete temporary directories once they are no longer needed 
+import shutil # only used to delete temporary directories once they are no longer needed
+import re # only used to create regular expressions filter to make obtaining personal ip address easier
+
 
 
 # The Character class is used as a wrapper for all important details a Dungeons and Dragons character needs (i.e. race, class, ability scores, etc.)
@@ -458,8 +462,7 @@ def recieveChar():
   print("\nIn order to receive a character from another user, you must provide your local wireless IP Address to the sender.")
   print("If you would like to proceed and begin awaiting the other user's character, enter 'proceed'")
   print("Otherwise enter 'exit' to return to the main menu.")
-  print("\n(If you are unaware of your local IP Address, type 'help' and a list of your computer's IP Addresses will be provided to you.")
-  print("IMPORTANT: you will need to specifically share the 'IPv4 Address' under the 'Wireless LAN adapter Wi-Fi' section)\n")
+  print("\n(If you are unaware of your local IP Address, type 'help' and it will be provided to you.\n")
 
   
   # User selection and input validation loop
@@ -469,8 +472,31 @@ def recieveChar():
     if choice == "help":
       print()
       # In the event the user does not know their IP Address, we can print out the information to the shell for the user to obtain
-      # Clear instructions on which IP to provided have been provided to the user already
-      os.system("ipconfig")
+
+      # OLD method involved user having to look through multiple addresses and determine the correct one themselves
+      #os.system("ipconfig")
+
+      # NEW method utilizes regular expressions to parse and provide the correct individual address:
+      # Pipe IP Address information to temporary text file
+      os.system("ipconfig >> stuff.txt") 
+
+      # Temporary file containing IP Address information
+      with open('stuff.txt', 'r') as file:
+        data = file.read()
+
+      # Regex filter to find correct ipv4 adress:
+      # x is a list of strings that match the regex below (it searches for the wifi specific ip address)
+      x = re.findall("Wireless LAN adapter Wi-Fi:\n*.*\n*.*\n*.*", data) 
+
+      # Printing the correct address to the user to share:
+      # x should only contain one string that matches the regex (hence why we access x[0])
+      # We only want the portion of that string (x[0][...]) that contains the IPv4 address information.
+      # We find that by grabing the index of the string starting from where IPv4 is mentioned (x[0].index('IPv4'))
+      # all the way to the end of the string (the : following x[0].index('IPv4'))
+      print(x[0][x[0].index('IPv4'):])
+
+      # The temporary file is no longer needed so we can delete it
+      os.remove("stuff.txt") 
       print()
     elif choice == "proceed":
       break
@@ -558,8 +584,8 @@ def recieveChar():
   
 
 
-
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!! PROGRAM STARTS HERE !!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 
 helpHeader(50,"Welcome to Dungeons and Pythons")
 
@@ -612,26 +638,34 @@ while True:
       helpHeader(36, "Manage Your Characters")
       print()
 
+      # Try to open character shelve to access saved characters
       try:
         shelfFile = shelve.open('.\DNP_Characters\Characters')
       except:
-        os.mkdir('DNP_Characters') # in the event the user does not yet have a DNP_Characters folder
-        shelfFile = shelve.open('.\DNP_Characters\Characters')
+        # in the event the user does not yet have a shelve...
+        os.mkdir('DNP_Characters') # ... we create the folder it will go in...
+        shelfFile = shelve.open('.\DNP_Characters\Characters') # ... and create and open a new shelve.
       
+      # Store the characters' names from shelve as a list
       characterList = list(shelfFile.keys())
+
+      # Check to see if the user has any characters. If they do not, inform them and return to main menu
       if len(characterList) == 0:
         print("No characters have been created yet. Created characters will be stored in a folder called 'DNP_Characters' \n")
         continue
 
+      # Format and present characters for user to manage
       for charNum in range(0,len(characterList)):
         print(f"{charNum+1}) {characterList[charNum]}")
       print()
 
+      # User selection and input validation loop
       while True:
         choice = input("Which character would you like to manage? (type a row number): ").strip()
-        try:
-          choice = int(choice)
-          if choice > 0 and choice < (len(characterList)+1):
+        try: # if the user does not type an integer, then the following conversion will throw
+          choice = int(choice) 
+          if choice > 0 and choice < (len(characterList)+1): # The user picked a valid character option
+            # Obtain the appropriate character object from shelve
             CharObj = shelfFile[characterList[choice-1]]
             break
           else:
@@ -736,10 +770,12 @@ def pickRace():
   print("If you would like to know more about a particular race before you make your choice, type 'info' below.")
   print("If you would like a race picked for you, type 'random' below.")
   print("Otherwise please just type the row number of the race you want your character to have below")
+
+  # User selection and input validation loop
   while True:
       choice = input("\nRace Option: ").strip().lower()
 
-
+      # Should the user want to know more about a class
       if choice == "info":
 
         while True:
@@ -767,7 +803,7 @@ def pickRace():
 
       elif choice == "random":
         # if the user wanted their character's race selected randomly
-        choice = random.randrange(1,10)
+        choice = random.randrange(1,10)# randrange(inclusive lower, exclusive upper)
       
 
       try: # if the user enters in something that is not an integer, the except clause will trigger
@@ -790,6 +826,13 @@ print()
 # ---------------------------------- CHARACTER CLASS I/O ----------------------------------
 
 def pickClass():
+  '''
+  Allows the user to select a class option for their character.
+
+  Additionally if the user would like to know more about a particular class, a webpage will open up on 
+  their default browser displaying more information about the class.
+  '''
+
   # list of possible classes avaliable in Dungeons and Dragons 5th edition that the user can pick from
   classes = ["Barbarian","Bard","Cleric","Druid","Fighter","Monk","Paladin","Ranger","Rogue","Sorcerer","Warlock","Wizard"]
 
@@ -803,20 +846,24 @@ def pickClass():
   print("If you would like to know more about a particular class before you make your choice, type 'info' below.")
   print("If you would like a class picked for you, type 'random' below.")
   print("Otherwise please just type the row number of the class you want your character to have below") 
+
+  # User selection and input validation loop
   while True:
       choice = input("\nClass Option: ").strip().lower()
 
-
+      # Should the user want to know more about a class
       if choice == "info":
         while True:
           choice = input("\nWhich of the classes would you like to know more about? \n(type a row number or 'none' to go back): ").strip().lower()
           if choice == 'none':
-            break
+            break 
           try:
-            if int(choice) > 0 and int(choice) < 13:
+            if int(choice) > 0 and int(choice) < 13: # if the user enters in something that is not an integer, the outer except clause will trigger
+              # the user can only pick among the 12 classes available
               classStr = classes[int(choice)-1].lower()
               print("\nOpening:  https://www.dndbeyond.com/classes/" + classStr + "\n")
               try:
+                # Open webpage associated with the class the user wants to know more about
                 wb.open('https://www.dndbeyond.com/classes/' + classStr)
               except:
                 print("Sorry, unable to open URL in browser.")
@@ -827,12 +874,14 @@ def pickClass():
           except:
             print(f"I'm sorry, I didn't understand '{choice}' ")
             continue
+        
         continue # Go back to character class prompt
 
-
+      # Pick a class at random for the user
       elif choice == "random": 
-        choice = random.randrange(1,13)
+        choice = random.randrange(1,13) # randrange(inclusive lower, exclusive upper)
 
+      # Same conditions need to be checked for choice selection here as in the "info" case above
       try:
         if int(choice) > 0 and int(choice) < 13:
           classChoice = classes[int(choice)-1]
@@ -883,6 +932,7 @@ def rollScores():
   return values
 
 
+# We roll our six ability score values and let the user decide if they want to reroll or proceed
 while True:
   Scores = rollScores()
 
@@ -897,21 +947,30 @@ print()
 
 
 def assignScores(Scores):
+  '''
+  Allows the user to assign ability score values based on a list of ability score dice rolls
+  '''
+
   # Dictionary of all ability scores avaliable in Dungeons and Dragons 5th edition that a character has
   abScores = {"Strength" : None, "Dexterity" : None, "Constitution" : None, "Intelligence" : None, "Wisdom" : None, "Charisma" : None}
 
+  # This list will keep track of which ability scores have already been allocated a value
   usedScores = []
+
+  # For each of the six abilities...
   for ab in abScores.keys():
 
+    # User selection and input validation loop
     while True: 
       print(f"Rows who's values have already been used: {usedScores}")
       choice = input(f"Which score would you like to go in {ab}? (select the row number): ").strip().lower()
 
       try:
-        if choice in usedScores:
+        if choice in usedScores: # the user cannot allocate more than one value to a single ability
           print(f"you already used the score for row {choice}")
           print()
-        elif int(choice) > 0 and int(choice) < 7:
+        elif int(choice) > 0 and int(choice) < 7: # if the user enters in something that is not an integer, the outer except clause will trigger
+          # the user can only pick among the 6 abilities available
           abScores[ab] = Scores[int(choice)-1]
           usedScores.append(choice)
           print()
@@ -926,6 +985,7 @@ def assignScores(Scores):
   return abScores
 
 
+# Allow the user assign their ability score rolls and reroll if they are not satisfied
 while True:
   abScores = assignScores(Scores)
   print(f"Your character has the following ability scores: \n{abScores}")
@@ -944,6 +1004,9 @@ while True:
 # ---------------------------------- NAME, GENDER, AND AGE ASSIGNMENT ----------------------------------
 
 def genderAssignment():
+  '''
+  Allows the user to select a gender option for their character
+  '''
 
   print("\nWhat is your character's gender? \n")
 
@@ -965,6 +1028,8 @@ def genderAssignment():
 
   return genderChoice
 
+
+# User selection and input loop (simplified to only proceed on a yes condition)
 while True:
   genderChoice = genderAssignment()
   choice = input(f"You went with the gender option: {genderChoice} \nIs this correct (Y/N): ").strip().lower()
@@ -974,6 +1039,11 @@ while True:
 
 
 def ageAssignment():
+  '''
+  Allows the user to pick an age for their character and also provides information (obtained through webscrapping) 
+  on race specific age-ranges based on what the user had previously selected as their character's race.
+  '''
+
   print("\nHow old is your character?")
   print(f"In case you were wondering, here is some information about the lifespan of the {raceChoice} race:\n")
 
@@ -1008,6 +1078,7 @@ def ageAssignment():
       print("Your age must be in the form of a number like '5' '60' or '374'")
 
 
+# User selection and input loop (simplified to only proceed on a yes condition)
 while True:
   ageChoice = ageAssignment()
   choice = input(f"So your character is {ageChoice} years old? \nIs this correct (Y/N): ").strip().lower()
@@ -1015,7 +1086,7 @@ while True:
     break
 
 
-
+# Character name assignment beings here
 
 print("\nNow let's give your character a name!")
 print("If you would like, I can help you find some names based on your character's race and gender (just type 'help' below) ")
@@ -1062,6 +1133,7 @@ def nameAssignment():
       return nameChoice
 
 
+# User selection and input loop (simplified to only proceed on a yes condition)
 while True:
   nameChoice = nameAssignment()
   choice = input(f"Your character's name is {nameChoice}? (Y/N): ").strip().lower()
@@ -1114,7 +1186,8 @@ while True:
   elif choice == "5":
     ageChoice = ageAssignment()
   elif choice == "6":
-
+    
+    # re-roll ability score values
     while True:
       Scores = rollScores()
 
@@ -1132,4 +1205,4 @@ while True:
     print(f"I'm sorry, I didn't understand '{choice}' \n")
 
 
-        
+# NOTE: program will terminate after a new character is created.
